@@ -1,0 +1,115 @@
+```groovy
+pipeline {
+    agent any
+
+    environment {
+        QA_SERVER   = "ubuntu@15.206.184.2"
+        PROD_SERVER = "ubuntu@52.66.225.201"
+
+        QA_PATH   = "/home/ubuntu/qa-app"
+        PROD_PATH = "/home/ubuntu/prod-app"
+    }
+
+    stages {
+
+        stage('Clone Repository') {
+            steps {
+                git branch: 'main',
+                url: 'https://github.com/Gokulraja2004/mernstack-new.git'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+
+                sh 'npm install || true'
+
+                dir('frontend') {
+                    sh 'npm install'
+                }
+
+                dir('backend') {
+                    sh 'npm install'
+                }
+            }
+        }
+
+        stage('Build Frontend') {
+            steps {
+                dir('frontend') {
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('Deploy to QA') {
+            steps {
+
+                sh """
+                ssh ${QA_SERVER} '
+                    sudo rm -rf ${QA_PATH}
+                    mkdir -p ${QA_PATH}
+                '
+
+                scp -r * ${QA_SERVER}:${QA_PATH}
+
+                ssh ${QA_SERVER} '
+                    cd ${QA_PATH}/backend
+
+                    npm install
+
+                    sudo npm install pm2 -g
+
+                    pm2 delete qa-app || true
+
+                    PORT=5001 pm2 start server.js --name qa-app
+                '
+                """
+            }
+        }
+
+        stage('Approval for Production') {
+            steps {
+                input message: 'Deploy to Production?'
+            }
+        }
+
+        stage('Deploy to PROD') {
+            steps {
+
+                sh """
+                ssh ${PROD_SERVER} '
+                    sudo rm -rf ${PROD_PATH}
+                    mkdir -p ${PROD_PATH}
+                '
+
+                scp -r * ${PROD_SERVER}:${PROD_PATH}
+
+                ssh ${PROD_SERVER} '
+                    cd ${PROD_PATH}/backend
+
+                    npm install
+
+                    sudo npm install pm2 -g
+
+                    pm2 delete prod-app || true
+
+                    PORT=5002 pm2 start server.js --name prod-app
+                '
+                """
+            }
+        }
+    }
+
+    post {
+
+        success {
+            echo 'CI/CD Pipeline Executed Successfully 🚀'
+        }
+
+        failure {
+            echo 'Pipeline Failed ❌'
+        }
+    }
+}
+```
