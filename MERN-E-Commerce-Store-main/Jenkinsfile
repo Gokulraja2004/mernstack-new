@@ -1,13 +1,11 @@
-```groovy
 pipeline {
     agent any
 
     environment {
-        QA_SERVER   = "ubuntu@15.206.184.2"
-        PROD_SERVER = "ubuntu@52.66.225.201"
+        QA_SERVER   = "15.206.184.2"
+        PROD_SERVER = "52.66.225.201"
 
-        QA_PATH   = "/home/ubuntu/qa-app"
-        PROD_PATH = "/home/ubuntu/prod-app"
+        SERVER_USER = "ubuntu"
     }
 
     stages {
@@ -22,21 +20,20 @@ pipeline {
         stage('Install Dependencies') {
             steps {
 
-                sh 'npm install || true'
-
-                dir('frontend') {
-                    sh 'npm install'
+                dir('MERN-E-Commerce-Store-main') {
+                    sh 'npm install --legacy-peer-deps'
                 }
 
-                dir('backend') {
-                    sh 'npm install'
+                dir('MERN-E-Commerce-Store-main/frontend') {
+                    sh 'npm install --legacy-peer-deps'
                 }
             }
         }
 
         stage('Build Frontend') {
             steps {
-                dir('frontend') {
+
+                dir('MERN-E-Commerce-Store-main/frontend') {
                     sh 'npm run build'
                 }
             }
@@ -46,23 +43,42 @@ pipeline {
             steps {
 
                 sh """
-                ssh ${QA_SERVER} '
-                    sudo rm -rf ${QA_PATH}
-                    mkdir -p ${QA_PATH}
+                ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${QA_SERVER} '
+                    sudo rm -rf /home/ubuntu/qa-app
+                    mkdir -p /home/ubuntu/qa-app
                 '
+                """
 
-                scp -r * ${QA_SERVER}:${QA_PATH}
+                sh """
+                scp -o StrictHostKeyChecking=no -r \
+                MERN-E-Commerce-Store-main/* \
+                ${SERVER_USER}@${QA_SERVER}:/home/ubuntu/qa-app
+                """
 
-                ssh ${QA_SERVER} '
-                    cd ${QA_PATH}/backend
+                sh """
+                ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${QA_SERVER} '
 
-                    npm install
+                    # BACKEND
+                    cd /home/ubuntu/qa-app/backend
 
-                    sudo npm install pm2 -g
+                    npm install --legacy-peer-deps
 
                     pm2 delete qa-app || true
 
-                    PORT=5001 pm2 start server.js --name qa-app
+                    PORT=5001 pm2 start index.js --name qa-app
+
+                    # FRONTEND
+                    cd /home/ubuntu/qa-app/frontend
+
+                    npm install --legacy-peer-deps
+
+                    npm run build
+
+                    pm2 delete frontend || true
+
+                    pm2 start "npx serve -s dist -l 3000" --name frontend
+
+                    pm2 save
                 '
                 """
             }
@@ -78,23 +94,42 @@ pipeline {
             steps {
 
                 sh """
-                ssh ${PROD_SERVER} '
-                    sudo rm -rf ${PROD_PATH}
-                    mkdir -p ${PROD_PATH}
+                ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${PROD_SERVER} '
+                    sudo rm -rf /home/ubuntu/prod-app
+                    mkdir -p /home/ubuntu/prod-app
                 '
+                """
 
-                scp -r * ${PROD_SERVER}:${PROD_PATH}
+                sh """
+                scp -o StrictHostKeyChecking=no -r \
+                MERN-E-Commerce-Store-main/* \
+                ${SERVER_USER}@${PROD_SERVER}:/home/ubuntu/prod-app
+                """
 
-                ssh ${PROD_SERVER} '
-                    cd ${PROD_PATH}/backend
+                sh """
+                ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${PROD_SERVER} '
 
-                    npm install
+                    # BACKEND
+                    cd /home/ubuntu/prod-app/backend
 
-                    sudo npm install pm2 -g
+                    npm install --legacy-peer-deps
 
                     pm2 delete prod-app || true
 
-                    PORT=5002 pm2 start server.js --name prod-app
+                    PORT=5002 pm2 start index.js --name prod-app
+
+                    # FRONTEND
+                    cd /home/ubuntu/prod-app/frontend
+
+                    npm install --legacy-peer-deps
+
+                    npm run build
+
+                    pm2 delete prod-frontend || true
+
+                    pm2 start "npx serve -s dist -l 3001" --name prod-frontend
+
+                    pm2 save
                 '
                 """
             }
@@ -104,7 +139,7 @@ pipeline {
     post {
 
         success {
-            echo 'CI/CD Pipeline Executed Successfully 🚀'
+            echo 'Pipeline Success ✅'
         }
 
         failure {
@@ -112,4 +147,3 @@ pipeline {
         }
     }
 }
-```
