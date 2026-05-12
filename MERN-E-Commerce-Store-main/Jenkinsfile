@@ -12,21 +12,9 @@ pipeline {
 
         stage('Clone Repository') {
             steps {
+
                 git branch: 'main',
                 url: 'https://github.com/Gokulraja2004/mernstack-new.git'
-            }
-        }
-
-        stage('Install Dependencies') {
-            steps {
-
-                dir('MERN-E-Commerce-Store-main') {
-                    sh 'npm install --legacy-peer-deps'
-                }
-
-                dir('MERN-E-Commerce-Store-main/frontend') {
-                    sh 'npm install --legacy-peer-deps'
-                }
             }
         }
 
@@ -34,6 +22,9 @@ pipeline {
             steps {
 
                 dir('MERN-E-Commerce-Store-main/frontend') {
+
+                    sh 'npm install --legacy-peer-deps'
+
                     sh 'npm run build'
                 }
             }
@@ -44,14 +35,15 @@ pipeline {
 
                 sh """
                 ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${QA_SERVER} '
-                    sudo rm -rf /home/ubuntu/qa-app
+                    rm -rf /home/ubuntu/qa-app
                     mkdir -p /home/ubuntu/qa-app
                 '
                 """
 
                 sh """
-                scp -o StrictHostKeyChecking=no -r \
-                MERN-E-Commerce-Store-main/* \
+                rsync -avz --exclude=node_modules --exclude=.git \
+                -e "ssh -o StrictHostKeyChecking=no" \
+                MERN-E-Commerce-Store-main/ \
                 ${SERVER_USER}@${QA_SERVER}:/home/ubuntu/qa-app
                 """
 
@@ -95,14 +87,15 @@ pipeline {
 
                 sh """
                 ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${PROD_SERVER} '
-                    sudo rm -rf /home/ubuntu/prod-app
+                    rm -rf /home/ubuntu/prod-app
                     mkdir -p /home/ubuntu/prod-app
                 '
                 """
 
                 sh """
-                scp -o StrictHostKeyChecking=no -r \
-                MERN-E-Commerce-Store-main/* \
+                rsync -avz --exclude=node_modules --exclude=.git \
+                -e "ssh -o StrictHostKeyChecking=no" \
+                MERN-E-Commerce-Store-main/ \
                 ${SERVER_USER}@${PROD_SERVER}:/home/ubuntu/prod-app
                 """
 
